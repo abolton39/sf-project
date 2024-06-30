@@ -1,11 +1,18 @@
-FROM python:3.8-slim
+FROM python:3.9-slim
 
 WORKDIR /app
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libatlas-base-dev \
+    libblas-dev \
+    liblapack-dev \
+    gfortran
+
 COPY requirements.txt requirements.txt
-RUN python -m pip install --upgrade pip setuptools wheel
+
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install numpy --upgrade
 
 COPY src src
 COPY data data

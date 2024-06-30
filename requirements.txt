@@ -5,4 +5,4 @@ fastapi
 uvicorn
 pyyaml
 joblib
-numpy
+numpy==1.24.2
