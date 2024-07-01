@@ -15,15 +15,6 @@ def initial_feature_selection(train_all):
     var_reduced = exploratory_results.nlargest(25, 'coefs_squared')
     return var_reduced['name'].to_list()
 
-def convert_bool_to_numeric(train_all, variables):
-    """
-    Converts boolean columns to numeric.
-    """
-    for col in variables:
-        if train_all[col].dtype == 'bool':
-            train_all[col] = train_all[col].astype(int)
-    return train_all
-
 def final_model(train_all, variables):
     """
     Fits the final logistic regression model.
@@ -32,10 +23,12 @@ def final_model(train_all, variables):
     final_result = final_logit.fit()
     return final_result
 
-# Save the model and variables
-def save_model(model, variables, model_path='models/model.pkl', variables_path='models/variables.pkl'):
+# Save the model, variables, and scaler
+def save_model(model, variables, scaler, 
+               model_path='models/model.pkl', variables_path='models/variables.pkl', scaler_path='models/scaler.pkl'):
     joblib.dump(model, model_path)
     joblib.dump(variables, variables_path)
+    joblib.dump(scaler, scaler_path)
 
 # Load the model and variables
 def load_model(model_path='models/model.pkl', variables_path='models/variables.pkl'):

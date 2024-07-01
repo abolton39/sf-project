@@ -113,6 +113,10 @@ print("Status Code:", response.status_code)
 print("Raw Response:", response.text)
 
 try:
-    print("JSON Response:", response.json())
+    json_response = response.json()
+    print("JSON Response:", json_response)
+    print("Predicted Class:", json_response.get("predicted_class"))
+    print("Probability:", json_response.get("probability"))
+    print("Model Features:", json_response.get("model_features"))
 except requests.exceptions.JSONDecodeError as e:
     print("Error decoding JSON:", e)

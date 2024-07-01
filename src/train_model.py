@@ -1,13 +1,14 @@
 import pandas as pd
-from data_prep import clean_data, impute_and_scale, create_dummies, save_var_reduced
-from model import initial_feature_selection, convert_bool_to_numeric, final_model, save_model
+from data_prep import clean_data, impute_data, scale_data, create_dummies, convert_bool_to_numeric, save_var_reduced
+from model import initial_feature_selection, final_model, save_model
 
 # Load your data
 train_data = pd.read_csv('data/exercise_26_train.csv')
 
 # Data preparation
 train_data = clean_data(train_data)
-train_all_std = impute_and_scale(train_data)
+train_all_imputed = impute_data(train_data)
+train_all_std, scaler = scale_data(train_all_imputed)
 train_all_std = create_dummies(train_data, train_all_std)
 train_all = pd.concat([train_all_std, train_data['y']], axis=1, sort=False)
 
@@ -20,5 +21,5 @@ train_all = convert_bool_to_numeric(train_all, variables)
 # Final model
 final_result = final_model(train_all, variables)
 
-# Save the model and variables
-save_model(final_result, variables)
+# Save the model, variables, and scaler
+save_model(final_result, variables, scaler)
