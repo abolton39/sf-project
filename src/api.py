@@ -1,58 +1,34 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import pandas as pd
+import numpy as np
 import joblib
-import os
 import logging
-from src.model import convert_bool_to_numeric  # Importing the function
+from sklearn.impute import SimpleImputer
+from src.data_prep import add_missing_columns, clean_data, create_dummies, convert_bool_to_numeric
 
 app = FastAPI()
 
 logging.basicConfig(level=logging.DEBUG)
 
-class DataRow(BaseModel):
+class PredictionRequest(BaseModel):
     data: dict
 
-def clean_data(data):
-    """
-    Cleans and preprocesses the data.
-    """
-    data['x12'] = data['x12'].str.replace('$', '').str.replace(',', '').str.replace(')', '').str.replace('(', '-')
-    data['x12'] = pd.to_numeric(data['x12'], errors='coerce')
-    data['x63'] = data['x63'].str.replace('%', '')
-    data['x63'] = pd.to_numeric(data['x63'], errors='coerce')
-    return data
-
-def create_dummies(data, base_data, dummy_columns):
-    """
-    Creates dummy variables for categorical columns.
-    """
-    for col in ['x5', 'x31', 'x81', 'x82']:
-        dummies = pd.get_dummies(data[col], drop_first=True, prefix=col, prefix_sep='_', dummy_na=True)
-        base_data = pd.concat([base_data, dummies], axis=1, sort=False)
-    
-    # Ensure all expected dummy columns are present
-    for col in dummy_columns:
-        if col not in base_data.columns:
-            base_data[col] = 0
-    
-    return base_data
-
 @app.post("/predict")
-def predict(data: DataRow):
+def predict(request: PredictionRequest):
     try:
-        input_data = pd.DataFrame([data.data])
-        model_path = 'model.pkl'
-        variables_path = 'variables.pkl'
+        input_data = pd.DataFrame([request.data])
+        model_path = '/app/models/model.pkl'
+        variables_path = '/app/models/variables.pkl'
+        scaler_path = '/app/models/scaler.pkl'
 
-        if not os.path.exists(model_path) or not os.path.exists(variables_path):
-            raise FileNotFoundError(f"Model file or variables file not found. Model path: {model_path}, Variables path: {variables_path}")
-
+        # Load all needed .pkl files
         logging.debug(f"Loading model from {model_path}")
         model = joblib.load(model_path)
-
         logging.debug(f"Loading variables from {variables_path}")
         variables = joblib.load(variables_path)
+        logging.debug(f"Loading model from {scaler_path}")
+        scaler = joblib.load(scaler_path)
 
         logging.debug(f"Input data before cleaning: {input_data}")
         
@@ -60,36 +36,43 @@ def predict(data: DataRow):
         input_data = clean_data(input_data)
         logging.debug(f"Input data after cleaning: {input_data}")
 
-        # Initialize standardized data (e.g., scaling if necessary)
-        input_data_std = input_data.copy()  # Assuming standardization is done similarly to training data
+        # Mean imputation for empty values
+        try:
+            imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+            data_imputed = pd.DataFrame(imputer.fit_transform(input_data.drop(columns=['x5', 'x31', 'x81', 'x82'])), 
+                                             columns=input_data.drop(columns=['x5', 'x31', 'x81', 'x82']).columns)
+        except ValueError as e:
+            # For single row calls, mean doesn't work. Fill "" and NAN with 0s
+            input_data.replace("", np.nan, inplace=True)
+            data_imputed = input_data.drop(columns=['x5', 'x31', 'x81', 'x82']).fillna(0)
+        logging.debug(f"Input data after imputation: {data_imputed}")
 
-        # Create dummies for categorical variables
-        input_data_std = create_dummies(input_data, input_data_std, variables)
-        logging.debug(f"Input data after creating dummies: {input_data_std}")
+        # Scale the data
+        data_std = pd.DataFrame(scaler.transform(data_imputed))
+        logging.debug(f"Input data after scaling: {data_std}")
+
+        # Create dummies for non-numeric variables
+        data_dummies = create_dummies(input_data, data_std)
+        logging.debug(f"Input data after creating dummies: {data_dummies}")
+
+        # Add any missing columns. Only needed when not all columns are present for 1 hot
+        data_all = add_missing_columns(data_dummies, variables)
+        data_all = data_all[variables]
 
         # Convert boolean columns to numeric
-        input_data_std = convert_bool_to_numeric(input_data_std, variables)
-        logging.debug(f"Input data after converting booleans: {input_data_std}")
+        data_all = convert_bool_to_numeric(data_all, variables)
+        logging.debug(f"Input data before prediction: {data_all}")
+        logging.debug(f"Data types of input data: {data_all.dtypes}")
 
-        # Ensure all expected columns are present
-        missing_columns = [col for col in variables if col not in input_data_std.columns]
-        if missing_columns:
-            logging.error(f"Missing columns: {missing_columns}")
-            raise ValueError(f"Missing columns: {missing_columns}")
-
-        input_data_std = input_data_std[variables]
-        logging.debug(f"Input data before prediction: {input_data_std}")
-        logging.debug(f"Data types of input data: {input_data_std.dtypes}")
-
-        # Making prediction
-        prob = model.predict(input_data_std)
-        predicted_class = (prob > 0.5).astype(int)
-        print(predicted_class)
-        print(prob)
+        # Prediction
+        prob = model.predict(data_all)
+        # Specify threshold here, could be passed as a variable by customer
+        prob_threshold = 0.75
+        predicted_class = (prob > prob_threshold).astype(int)
         
         return {
-            "predicted_class": predicted_class.tolist(),
-            "probability": prob.tolist(),
+            "business_outcome": predicted_class.tolist(),
+            "phat": prob.tolist(),
             "model_features": variables
         }
     except Exception as e:
