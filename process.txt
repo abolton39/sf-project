@@ -1,0 +1,44 @@
+I'll try to make this brief, but I'm happy to answer any questions in detail on the process.
+
+
+Step 1: Train the model. Found in train_model.py. These files are saved in models/ to be used by the API. 
+    - Load the data from 'exercise_26_train.csv'
+    - Clean the data removing special characters
+    - Impute and scale 
+    - 1 hot for non-numeric columns
+    - Fix data types for all columns
+    - Initial feature selection
+    - Fit the model and save the mode, variables used, imputer, and scaler
+
+
+Step 2: Code for the Docker image. Found in Dockerfile
+    - Copies repo into image
+    - Gets all packages listed in requirements.txt as well as system dependencies
+    - Opens ports 1313 for FastAPI and 8501 for Streamlit
+
+
+Step 3: Run the container. Found in run_api.sh
+    - Runs command to build the docker image
+    - Runs command to run the container with specified open ports
+
+
+Step 4 (Optional): Open Streamlit app. Found in app.py
+    - This app is found at http://localhost:8501/
+    - Gives a user an upload field for a JSON with the input data
+    - Predict button calls the API with the apropriate request
+
+
+Step 5: FastAPI endpoint. Found in src/api.py
+    - Sets up an endpoint with the port 1313
+    - Loads in the saved .pkl files for the model, variables used, and scaler
+    - Follows the same data prep process as in Step 1. Clean, impute, scale, 1 hot, fix data types
+    - Runs predictions on the input data, returns predicted probability of positive class
+    - Threshold of postive class set to 75%
+    - Returns class, probability, and variables used in the model
+
+
+Unittests are included in tests/ for each of these steps. 
+
+Using FastAPI and testing with the included file exercise_26_test.csv, I was able to get a response 
+for all 10,000 rows in seconds. For this implementation, Docker is sufficient. If we'd expect a significantly 
+higher volume of calls, Kubernetes' ability to scale would be more appropriate. 

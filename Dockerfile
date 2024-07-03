@@ -16,4 +16,8 @@ COPY . .
 # Get package dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "1313"]
+# Expose the ports for FastAPI and Streamlit
+EXPOSE 1313 8501
+
+# Start both FastAPI and Streamlit
+CMD ["sh", "-c", "uvicorn src.api:app --host 0.0.0.0 --port 1313 & streamlit run app.py"]
